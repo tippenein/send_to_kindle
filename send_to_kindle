@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+'''
+Script to send books to your kindle from the commandline
+Uses your gmail address as the sender and therefore needs a password for
+authentication.  
+'''
+
+import os, sys
+import smtplib
+import getpass
+from email.MIMEMultipart import MIMEMultipart
+from email.MIMEBase import MIMEBase
+from email.MIMEText import MIMEText
+from email.Utils import formatdate, COMMASPACE
+from email import encoders
+
+# username for login info
+email_user = "planetplosion"
+# This should change to a better way of dealing with this.
+email_pass = getpass.getpass("Password for the sender's account? ")
+
+def send_to_kindle(books):
+    '''
+    Takes args from the command line of books you're attaching
+    @books should always be a list since we're taking it from sys.argv[1:]
+    '''
+    _from       = "planetplosion@gmail.com"
+    _to         = ["planetplosion@kindle.com"]
+    _subject    = "books"
+    _text       = "some books"
+    _files      = books
+    _server     = "smtp.gmail.com"  # unused atm, just plugging it in
+    send_mail(_from, _to, _subject, _text, _files, _server)
+
+def send_mail(send_from, send_to, subject, text, files, server):
+    '''
+    @send_from  - the sender address (the host of the smtp service you'll be using)
+    @send_to    - the kindle email
+    @subject, text - doesn't matter
+    @files      - list of files to attach
+    @server     - smtp.gmail.com on port 587 is the default
+    '''
+    assert type(send_to) == list
+    assert type(files) == list
+    
+    msg = MIMEMultipart()
+
+    msg["From"] = send_from 
+    msg["To"] = COMMASPACE.join(send_to)
+    msg["Date"] = formatdate(localtime=True)
+    msg["Subject"] = subject
+
+    msg.attach( MIMEText(text) )
+    
+    for f in files:
+        print f
+        part = MIMEBase('application', "octet-stream")
+        part.set_payload( open(f,"rb").read() )
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', 'attachment;'
+                'filename={}'.format(os.path.basename(f)))
+        msg.attach(part)
+
+    smtp = smtplib.SMTP( server, 587 )
+
+    try: 
+        smtp.ehlo()
+        print "finished ehlo, starting tls"
+        smtp.starttls()
+        smtp.ehlo()
+        print "logging in"
+        smtp.login( email_user, email_pass )
+        print "sending mail"
+        smtp.sendmail(send_from, send_to, msg.as_string())
+    except:
+        #TODO refine this exception
+        print "Sending to {} failed".format(server)
+    
+    smtp.close()
+
+def usage():
+    return '''
+        usage: ./{} book1 book2 ...     
+    '''.format(sys.argv[0])
+
+if __name__ == '__main__':
+    if (len(sys.argv) < 2):
+        print usage()
+        sys.exit()
+    print sys.argv[1:]
+    print type(sys.argv[1:])
+    send_to_kindle(sys.argv[1:])
+
